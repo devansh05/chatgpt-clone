@@ -7,8 +7,8 @@
 **0.3 Global styles, fonts, theme tokens** — `app/globals.css` — Tailwind v4 CSS-based config, light/dark CSS variable tokens (`:root` / `.dark`), plus `@source "../node_modules/streamdown/dist/**/*.js"` so Tailwind scans Streamdown's own classes (this line is actually added later, alongside Initiative 7, but lives in this same file). `app/layout.tsx` — loads `Geist`, `Geist_Mono`, `IBM_Plex_Sans` and applies them via `cn(...)` on `<html>`.
 
 **0.4 Shared utilities** — `lib/utils.ts` (`cn` helper combining `clsx` + `tailwind-merge`), `hooks/use-mobile.ts` (root-level, **not** under `features/` — 768px breakpoint hook, currently unused by the sidebar but scaffolded for later responsive work).
-
 ---
+##COMPLETED
 
 ## Initiative 1 — Global Providers (Theme + React Query)
 
