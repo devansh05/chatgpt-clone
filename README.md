@@ -7,6 +7,7 @@ Tech Stack:
 3. TailwindCSS
 4. Ai SDK (Vercel) + OpenAi
 5. Clerk Authentication
+6. Bun package manager
 
 Features:
 1. Authentication using clerk
