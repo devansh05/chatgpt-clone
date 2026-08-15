@@ -19,6 +19,7 @@
 **1.3 Wire providers into the root layout** — `app/layout.tsx` — nest `QueryProvider` → `ThemeProvider` (`attribute="class"`, `defaultTheme="system"`, `enableSystem`, `disableTransitionOnChange`) → `TooltipProvider` → `{children}` + `<Toaster />` (`components/ui/sonner.tsx`). (Clerk's `ClerkProvider` wraps *around* all of this — added in Initiative 3.)
 
 ---
+##COMPLETED
 
 ## Initiative 2 — Prisma and Database Setup
 
