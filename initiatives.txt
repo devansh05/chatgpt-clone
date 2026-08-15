@@ -1,0 +1,147 @@
+## Initiative 0 — Project Init & Shadcn Setup
+
+**0.1 Initialize the Next.js app** — `package.json`, `next.config.ts`, `tsconfig.json`, `eslint.config.mjs` — Next.js 16 App Router, TypeScript strict mode, `@/*` path alias (`tsconfig.json` → `paths: { "@/*": ["./*"] }`).
+
+**0.2 Install shadcn/ui** — `components.json` — style `base-nova`, base color `neutral`, icon library `lucide`; generates the ~50 primitives under `components/ui/*` (button, sidebar, input-group, empty, sonner, etc. — these stay shared/global, not feature-scoped).
+
+**0.3 Global styles, fonts, theme tokens** — `app/globals.css` — Tailwind v4 CSS-based config, light/dark CSS variable tokens (`:root` / `.dark`), plus `@source "../node_modules/streamdown/dist/**/*.js"` so Tailwind scans Streamdown's own classes (this line is actually added later, alongside Initiative 7, but lives in this same file). `app/layout.tsx` — loads `Geist`, `Geist_Mono`, `IBM_Plex_Sans` and applies them via `cn(...)` on `<html>`.
+
+**0.4 Shared utilities** — `lib/utils.ts` (`cn` helper combining `clsx` + `tailwind-merge`), `hooks/use-mobile.ts` (root-level, **not** under `features/` — 768px breakpoint hook, currently unused by the sidebar but scaffolded for later responsive work).
+
+---
+
+## Initiative 1 — Global Providers (Theme + React Query)
+
+**1.1 Theme provider** — `components/providers/theme-provider.tsx` — thin wrapper around `next-themes`'s `ThemeProvider`.
+
+**1.2 React Query provider** — `components/providers/query-provider.tsx` — `useState(() => new QueryClient({ defaultOptions: { queries: { staleTime: 30_000 } } }))`; server/browser singleton via `React.useState` (not an `isServer` module-level split); mounts `ReactQueryDevtools` only when `process.env.NODE_ENV === "development"`.
+
+**1.3 Wire providers into the root layout** — `app/layout.tsx` — nest `QueryProvider` → `ThemeProvider` (`attribute="class"`, `defaultTheme="system"`, `enableSystem`, `disableTransitionOnChange`) → `TooltipProvider` → `{children}` + `<Toaster />` (`components/ui/sonner.tsx`). (Clerk's `ClerkProvider` wraps *around* all of this — added in Initiative 3.)
+
+---
+
+## Initiative 2 — Prisma and Database Setup
+
+**2.1 Install Prisma + Postgres adapter** — `package.json` deps (`prisma`, `@prisma/client`, `@prisma/adapter-pg`), `prisma.config.ts` (loads `DATABASE_URL` via `dotenv/config`, points to `prisma/schema.prisma`).
+
+**2.2 Define the `User` model** — `prisma/schema.prisma` — `generator client { provider = "prisma-client", output = "../lib/generated/prisma" }`, `User` keyed by Clerk's own id (`id String @id`, `clerkId String @unique`), unique `email`.
+
+**2.3 Prisma client singleton** — `lib/db.ts` — `createPrismaClient()` using the `PrismaPg` adapter, cached on `globalThis` outside production to survive HMR.
+
+**2.4 First migration** — `prisma/migrations/20260710070301_init/migration.sql`; generated client lands in the git-ignored `lib/generated/prisma`.
+
+---
+
+## Initiative 3 — Authentication With Clerk
+
+**3.1 Install & configure Clerk** — `package.json` (`@clerk/nextjs`), env vars: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, sign-in/redirect URLs.
+
+**3.2 Edge middleware (`proxy.ts`, not `middleware.ts`)** — `proxy.ts` — `export default clerkMiddleware()` + `matcher` config skipping static assets. *Correction to the original note:* this **isn't a bug**. Per `AGENTS.md`, this is a customized Next.js build where the middleware entrypoint has been renamed — `node_modules/next/dist/lib/constants.js` defines both `MIDDLEWARE_FILENAME = 'middleware'` and `PROXY_FILENAME = 'proxy'`, and `isMiddlewareFile()` in `next/dist/build/utils.js` accepts *either* `middleware.ts` or `proxy.ts` as the edge entrypoint. So `proxy.ts` at the project root is the correct, working filename for this Next.js version — worth calling out as a "breaking change from your training data" gotcha instead.
+
+**3.3 Wrap the app in `ClerkProvider`** — `app/layout.tsx` — add `ClerkProvider` as the outermost provider (around `QueryProvider`).
+
+**3.4 Public auth routes** — `app/(auth)/layout.tsx` (centered card shell: `flex flex-col h-screen items-center justify-center`), `app/(auth)/sign-in/[[...sign-in]]/page.tsx` (`<SignIn forceRedirectUrl="/" />`).
+
+**3.5 Protect the app route group** — `app/(root)/layout.tsx` — `await auth.protect()` before rendering any child route.
+
+**3.6 Sync Clerk → Prisma `User`** — `features/auth/actions/onboard.ts` (`onBoard()` — `currentUser()` + `prisma.user.upsert`), `features/auth/actions/require-user.ts` (`requireUser()` — `auth.protect()` + `prisma.user.findUnique`, throws if onboarding hasn't run yet), `features/auth/index.ts` barrel exporting both. *(Not `lib/onboard.ts` / `lib/auth.ts` — auth is its own feature folder.)*
+
+---
+
+## Initiative 4 — Conversations and Messages Schema Setup
+
+**4.1 `Conversation` model** — `prisma/schema.prisma` — `title` (default `"New Chat"`), `model`, `systemPrompt`, `isPinned`, `isArchived`, `lastMessageAt` (denormalized for sidebar sort).
+
+**4.2 `Message` model + enums** — `MessageRole` (`USER/ASSISTANT/SYSTEM/TOOL`), `MessageStatus` (`PENDING/COMPLETE/ERROR`); `Message` fields: `content` (plain text), `parts` (`Json?`, full AI SDK `UIMessage.parts`), `metadata`, self-relation `parentId`/`children` (`@relation("MessageBranches")`) for future branching.
+
+**4.3 Relations & indexes** — `User.conversations`, `Conversation.messages`, `onDelete: Cascade`; composite indexes `[userId, lastMessageAt desc]` and `[userId, isPinned, lastMessageAt desc]` on `Conversation`; `[conversationId, createdAt asc]` on `Message`.
+
+**4.4 Migrate** — same migration as 2.4 (`prisma/migrations/20260710070301_init/migration.sql`) — `Conversation`/`Message` were part of the single initial migration, not a separate one; regenerate client.
+
+---
+
+## Initiative 5 — Server Actions and React Query Hooks
+
+**5.1 Query key factory** — `lib/query-keys.ts` (shared infra, not feature-scoped) — `queryKeys.conversations.all` / `.detail(id)`, `queryKeys.messages.byConversation(id)`.
+
+**5.2 Conversation server actions** — `features/conversation/actions/conversation-actions.ts` (**not** `server/actions/conversations.ts`) — `assertOwnsConversation` guard, `listConversations`, `getConversation`, `createConversation`, `updateConversation` (rename/pin/archive + `revalidatePath`), `deleteConversation`; re-exported from `features/conversation/index.ts`.
+
+**5.3 Message server actions** — `features/messages/actions/message-actions.ts` (**not** `server/actions/messages.ts`) — `listMessages`, `createMessage` (auto-renames `"New Chat"` from the first message), `updateMessage`, `deleteMessage`. *(Manual CRUD path — Initiative 8's streaming flow supersedes it for the live chat; see 9.5.)*
+
+**5.4 Conversation hooks** — `features/conversation/hooks/use-conversations.ts` — `useConversations`, `useCreateConversation` (invalidate + `router.push`), `useUpdateConversation`, `useDeleteConversation(activeId)` (redirects home if you delete the open chat), all with `sonner` toasts on error.
+
+**5.5 Message hooks** — `features/messages/hooks/use-messages.ts` — `useMessages`, `useCreateMessage`, `useUpdateMessage`, `useDeleteMessage`.
+
+---
+
+## Initiative 6 — Setup Sidebar and Conversation UI
+
+**6.1 Chat shell** — `features/conversation/components/chat-shell.tsx` (**not** `components/chat/chat-shell.tsx`) — `SidebarProvider` + `AppSidebar` + `SidebarInset`; mounted from `app/(root)/layout.tsx` after `onBoard()`.
+
+**6.2 App sidebar** — `features/conversation/components/app-sidebar.tsx` — logo/"New chat" header, `ChatList` (loading `Skeleton` rows, "No chats yet" empty state, active-item highlighting via `usePathname`), `ChatItem` (rename via `window.prompt`, pin/unpin, delete — all through the Initiative 5 hooks), `SidebarFooterMenu` (theme toggle via `useTheme`, Clerk `UserButton`).
+
+**6.3 Home page delegates to a dedicated `home` feature** — `features/home/actions/start-new-chat.ts` (`startNewChat()` — `requireUser()` → `prisma.conversation.create`), `app/(root)/page.tsx` (`await startNewChat()` → `redirect('/c/${id}')`), `features/home/index.ts` barrel. *(The original outline inlined this logic directly in `page.tsx`; the real code factors it into its own `home` feature.)*
+
+**6.4 Conversation route + ownership guard** — `app/(root)/c/[id]/page.tsx` — `getConversation(id)` wrapped in try/catch → `notFound()` if not owned.
+
+**6.5 Empty state** — `features/messages/components/chat-empty.tsx` — `Empty`/`EmptyHeader`/`EmptyMedia`/`EmptyTitle`/`EmptyDescription` from `components/ui/empty.tsx`, "How can I help you today?".
+
+**6.6 Composer** — `features/messages/components/chat-composer.tsx` — `InputGroup`/`InputGroupTextarea`, Enter-to-send / Shift+Enter newline, autosizing textarea, send button swaps icon for `Spinner` while sending.
+
+**6.7 Message list + AI element primitives** — `features/messages/components/chat-messages.tsx` (maps messages to bubbles), `components/ai-elements/conversation.tsx` (`StickToBottom` scroll container + `ConversationScrollButton`, defined but not yet wired into `ChatMessages`), `components/ai-elements/message.tsx` (`Message`/`MessageContent`/`MessageResponse`), `components/ai-elements/loader.tsx`. *(`ai-elements` stays a shared, cross-feature folder, not under `features/`.)*
+
+**6.8 Wire it together** — `features/messages/components/conversation-view.tsx` (first pass) — header with `SidebarTrigger` + title, `ChatEmpty` vs `ChatMessages` branch, `ChatComposer` at the bottom.
+
+---
+
+## Initiative 7 — AI and AI SDK Setup
+
+**7.1 Install & configure the model provider** — `package.json` (`ai`, `@ai-sdk/react`, `@ai-sdk/openai`), env var `OPENAI_API_KEY`, `features/ai/utils/models.ts` (**not** `lib/ai/models.ts`) — `getChatModel(modelId)`, `DEFAULT_CHAT_MODEL = "gpt-4o-mini"`; exported via `features/ai/index.ts`.
+
+**7.2 First streaming API route** — `app/api/chat/route.ts` (initial version) — `streamText({ model, messages: convertToModelMessages(...) })`, returned via `createUIMessageStreamResponse`/`toUIMessageStream`.
+
+**7.3 Hook the client up to streaming** — `features/messages/components/conversation-view.tsx` — replace the static message list with `useChat({ id, transport })` from `@ai-sdk/react`, `DefaultChatTransport({ api: "/api/chat", prepareSendMessagesRequest })`, `sendMessage({ text })` from the composer.
+
+**7.4 Render streamed markdown** — `components/ai-elements/message.tsx` — `Streamdown` + `@streamdown/code` plugin; `app/globals.css` `@source` directive so Tailwind scans Streamdown/Shiki classes.
+
+**7.5 "Thinking…" indicator** — `features/messages/components/chat-messages.tsx` — `isWaiting = status === "submitted" && messages.at(-1)?.role === "user"`, renders `Loader` in an assistant bubble.
+
+!ChatGPT Image Jul 15, 2026, 08_18_34 PM.png
+
+---
+
+## Initiative 8 — Chat Streaming and Saving to Database
+
+**8.1 Lock down and resolve the conversation** — `app/api/chat/route.ts` — `auth.protect()`, `requireUser()`, `prisma.conversation.findFirst({ id, userId })`, 404 if missing.
+
+**8.2 Persistence helpers** — `features/ai/actions/chat-store.ts` (**not** `lib/chat/store.ts`) — `loadChatMessages(conversationId)` (DB rows → `UIMessage[]`, falling back to `[{ type: "text", text: content }]` if `parts` is empty), `saveChatMessages(conversationId, messages, { updateTitle })` (upsert per message + bump `lastMessageAt`).
+
+**8.3 Save the user's message before generating a reply** — `route.ts` — compares the incoming `message.id` against `loadChatMessages` results to avoid double-saving, then `saveChatMessages(id, [message])`.
+
+**8.4 Save the assistant's reply as it finishes** — `route.ts` — `result.consumeStream()` (keeps saving even if the client disconnects), `toUIMessageStream({ onEnd: async ({ messages }) => saveChatMessages(id, messages, { updateTitle: false }) })`, `generateMessageId: createIdGenerator({ prefix: "msg", size: 16 })`.
+
+**8.5 Auto-title new chats** — `features/ai/actions/chat-store.ts` `saveChatMessages` — if the conversation's title is still `"New Chat"` and there's a first user message, set the title from it (`slice(0, 48)`).
+
+**8.6 Live-refresh the sidebar** — `features/messages/components/conversation-view.tsx` — `useChat({ onFinish: () => queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all }) })` so the renamed title/reordered list shows immediately.
+
+!fd6a5c6f-921c-47aa-8a9b-ac0bd2d9a922.png
+
+---
+
+## Initiative 9 — Loading Chat History and Wrapping Up
+
+**9.1 Load persisted history into the page** — `app/(root)/c/[id]/page.tsx` — `loadChatMessages(id)` (from `@/features/ai/actions/chat-store`) on the server, passed as `initialMessages` prop.
+
+**9.2 Hydrate `useChat` with history** — `features/messages/components/conversation-view.tsx` — `useChat({ id: conversationId, messages: initialMessages, transport })`; `key={id}` on `<ConversationView>` (in `app/(root)/c/[id]/page.tsx`) so switching chats remounts state cleanly.
+
+**9.3 Error handling** — `conversation-view.tsx` — `onError: (error) => toast.error(error.message)`; server-side `try/catch` around `saveChatMessages` inside the `onEnd` callback logs (`console.error`) instead of crashing the stream.
+
+**9.4 Final UI polish** — Confirm theme toggle, `TooltipProvider`, `Toaster` all wired from Initiatives 1/3; metadata (`title: "ChaiGPT"`, `description: "Chat with ChaiGPT"`) and favicon in `app/layout.tsx` / `app/favicon.ico`.
+
+**9.5 Bonus/optional module callout** — `features/messages/actions/message-actions.ts` + `features/messages/hooks/use-messages.ts` implement a manual (non-streaming) send/CRUD flow — useful as an exercise or fallback, but not what the live chat UI (`conversation-view.tsx`) actually uses.
+
+**9.6 Deployment checklist** — Required env vars (`DATABASE_URL`, `OPENAI_API_KEY`, Clerk keys), `prisma migrate deploy` on the target DB, `npm run build && npm run start` (or the Bun equivalents — this repo also ships a `bun.lock`).
+
+---
+
+###
