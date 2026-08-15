@@ -48,6 +48,7 @@ A fullstack NextJS major focused on logic building for Ai.
 5. Clerk Authentication
 6. Bun package manager
 7. ShadCn Design system
+8. Tanstack Query
 
 #Features:
 1. Authentication using clerk
