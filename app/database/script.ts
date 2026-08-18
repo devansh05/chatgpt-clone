@@ -4,12 +4,12 @@ async function main() {
   // Create a new user with a post
   const user = await prisma.user.create({
     data: {
-      name: "Bob",
-      email: "Bob@prisma.io",
+      name: "NEON",
+      email: "NEON@NEON.io",
       posts: {
         create: {
-          title: "Hello World",
-          content: "This is my first post!",
+          title: "Hello NEON",
+          content: "This is NEON CLOUD!",
           published: true,
         },
       },

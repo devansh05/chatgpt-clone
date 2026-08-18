@@ -45,7 +45,7 @@ A fullstack NextJS major focused on logic building for Ai.
 2. Prisma + Neon
 3. TailwindCSS
 4. Ai SDK (Vercel) + OpenAi
-5. Clerk Authentication
+5. Clerk Authentication & user management
 6. Bun package manager
 7. ShadCn Design system
 8. Tanstack Query
