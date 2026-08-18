@@ -6,7 +6,7 @@ export default function Home() {
     <>
       <ModeToggle />
       <h1>
-        Hello Next
+        Hello Chat
       </h1>
       <UserButton />
     </>
