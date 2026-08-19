@@ -1,6 +1,18 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
+// Migrate the latest changes on prisma from these models
+// bunx prisma migrate dev
+
+// Reset the databse with newly migrated changes
+// bunx prisma migrate reset
+
+// Generate the prisma based on latest changes
+// bunx prisma generate
+
+// Reset the whole db use this very very carefully
+// bunx prisma db push --force-reset
+
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
@@ -12,14 +24,87 @@ datasource db {
   provider = "postgresql"
 }
 
-
 model User {
-  id String @id @default(uuid())
-  clerkId String @unique
-  email String? @unique
-  firstName String?
+  //UUID (Universally Unique Identifier) is an industry-standard 128-bit identifier written in hex with dashes
+  id String @id @default(uuid()) //default value is a uuid created automatically
+  clerkId String @unique // unique id but different from primary key
+  email String? @unique // unique id but different from primary key
+  firstName String? // optional
   lastName String?
   imageUrl String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) // created automatically with default value
+  updatedAt DateTime @updatedAt // created automatically
+
+  // conversations array here as an array of Conversation model objects
+  conversations Conversation[]
+}
+
+
+model Conversation {
+  id String @id @default(cuid()) // CUID (Collision-resistant Unique Identifier) is a shorter (~25 chars)
+  title String @default("New Chat")
+  model String? // openai/gpt-4.1 — per-thread model override
+  systemPrompt  String?  @db.Text // Large text or characters
+  isPinned      Boolean  @default(false)
+  isArchived    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  lastMessageAt DateTime @default(now())
+  userId String // foreign key
+
+  // Setting "user" as a relation to "User" model table creating a reference to "id" key in "User" table,
+  // with the foreign key "userId" in "Conversations" model table 
+  // and with a cascade delete effect that if user is deleted then delete this conversation also
+  // user is the name of relation and its done between userId from Conversations (foreign key) and id in User table
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // messages array here as an array of Message model objects
+  messages Message[]
+
+  // Create an index, a separate, fast list where first, group all the letters by the person's ID (userId).
+  // Then, inside Person's group, stack the messages so the newest one is always right on top,
+  // (lastMessageAt(sort: Desc)).
+  @@index([userId, lastMessageAt(sort: Desc)])
+
+  // Make a second index. Group by the person (userId),
+  // Then divide their messages into two piles:
+  // 1. Pinned and Not Pinned (isPinned)
+  // 2. Stack the newest ones on top of each pile.
+  @@index([userId, isPinned, lastMessageAt(sort: Desc)])
+
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  TOOL
+}
+
+enum MessageStatus {
+  PENDING // created before streaming finishes
+  COMPLETE
+  ERROR
+}
+
+model Message {
+  id   String @id @default(cuid()) // default value a cuid
+  conversationId String // foreign key
+  role MessageRole
+   status         MessageStatus @default(COMPLETE)
+   content        String @db.Text
+   parts          Json?
+   metadata       Json?
+
+   // create a relation conversation from Conversation table and user conversationId here as foreign key
+   // id from Conversation table to relate to this foreign key, with a cascading effect on delete operation
+   // delete this message if conversation is deleted
+   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+   createdAt DateTime @default(now())
+   updatedAt DateTime @updatedAt
+
+   // to index messages as per conversations, and the latest conversation on top
+   @@index([conversationId, createdAt(sort: Desc)])
+   
 }
