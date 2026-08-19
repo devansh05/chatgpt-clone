@@ -1,6 +1,9 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
+// Update prisma migrations
+// bunx prisma migrate dev --name your_change_name
+
 // Migrate the latest changes on prisma from these models
 // bunx prisma migrate dev
 
