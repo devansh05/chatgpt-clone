@@ -11,9 +11,9 @@ import {
     deleteConversations
 
 } from "@/features/conversations/actions/conversation-actions";
-import { queryKeys } from "../utils/query-keys";
+import { queryKeys } from "../../utils/query-keys";
 
-export function useConversations() {
+export function useListAllConversations() {
     return useQuery({
         queryKey: queryKeys.conversations.all,
         queryFn: () => listAllConversations(),
