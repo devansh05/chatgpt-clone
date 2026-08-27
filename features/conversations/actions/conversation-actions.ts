@@ -125,6 +125,16 @@ async function deleteConversations(conversationId: string) {
     revalidatePath("/");
 }
 
+
+async function getUserConversations(conversationId: string) {
+
+    const loggedInUser = await requireUser()
+
+    // This function is to make sure that the user is deleting operations on his own convesations
+    return await assertOwnConversation(conversationId, loggedInUser.id)
+}
+
+
 // This function is to make sure that the user is doing operations on his own convesations
 async function assertOwnConversation(conversationId: string, userId: string) {
 
@@ -141,4 +151,4 @@ async function assertOwnConversation(conversationId: string, userId: string) {
     return conversationFound || null
 }
 
-export { listAllConversations, createConversations, updateConversations, deleteConversations }
+export { listAllConversations, createConversations, updateConversations, deleteConversations, getUserConversations }

@@ -1,4 +1,6 @@
 import React from 'react'
+import { getUserConversations } from '@/features/conversations/actions/conversation-actions'
+import { notFound } from 'next/navigation'
 
 type ConversationProps = {
 
@@ -8,6 +10,14 @@ type ConversationProps = {
 const NewConversationScreen = async ({ params }: ConversationProps) => {
 
     const { id } = await params;
+
+    try {
+        await getUserConversations(id)
+    }
+    catch (error) {
+        console.log(`🟡 LOG - error: `, error)
+        notFound()
+    }
 
     return (
         <div>{`Conversation Id : ${id}`}</div>
