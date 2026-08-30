@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server"
 import { requireUser } from '@/features/auth/action/logged-in-user'
+import { loadChatMessages, saveChatMessages } from "@/features/ai/actions/chat-store"
 import { prisma } from '@/lib/db'
 import { type UIMessage } from "ai"
 
@@ -28,11 +29,24 @@ export async function POST(req: Request) {
         }
     })
 
-    if(!conversation){
+    if (!conversation) {
         return new Response("Conversation not found.", { status: 400 });
     }
 
-    
+    // Step 6: Load previous messages as the conversation & user are verified
 
+    const previousMessages = await loadChatMessages(conversation.id);
+
+    // step 7 check if messages are previously saved else save the new message
+    const alreadySaved = previousMessages.some(
+        (storedMessage)=>storedMessage.id === message.id
+    )
+
+    if(!alreadySaved){
+        await saveChatMessages(conversation.id, [message]);
+    }
+
+    // fetch all the messages from conversation
+    const messages = alreadySaved ? previousMessages : [...previousMessages, message];
 
 }
