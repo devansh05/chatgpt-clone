@@ -1,8 +1,10 @@
-import { auth } from "@clerk/nextjs/server"
-import { requireUser } from '@/features/auth/action/logged-in-user'
-import { loadChatMessages, saveChatMessages } from "@/features/ai/actions/chat-store"
-import { prisma } from '@/lib/db'
-import { type UIMessage } from "ai"
+import { auth } from "@clerk/nextjs/server";
+import { requireUser } from '@/features/auth/action/logged-in-user';
+import { loadChatMessages, saveChatMessages } from "@/features/ai/actions/chat-store";
+import { prisma } from '@/lib/db';
+import { convertToModelMessages, createIdGenerator, createUIMessageStreamResponse, streamText, toUIMessageStream, type UIMessage } from "ai";
+import { getChatModel } from '@/features/ai/config/model'
+
 
 export async function POST(req: Request) {
 
@@ -39,14 +41,46 @@ export async function POST(req: Request) {
 
     // step 7 check if messages are previously saved else save the new message
     const alreadySaved = previousMessages.some(
-        (storedMessage)=>storedMessage.id === message.id
+        (storedMessage) => storedMessage.id === message.id
     )
 
-    if(!alreadySaved){
+    if (!alreadySaved) {
         await saveChatMessages(conversation.id, [message]);
     }
 
     // fetch all the messages from conversation
     const messages = alreadySaved ? previousMessages : [...previousMessages, message];
 
+    // step 8 prepare and start streaming
+
+    const streamResult = streamText({
+        model: getChatModel(conversation.model),
+        system: conversation.systemPrompt || "You are an extremly helpful assistant.",
+        // this is used to convert the messages received by user to model compatible format
+        messages: await convertToModelMessages(messages)
+    })
+    // step 9 this is to continue stream even if user closed conversation or killed the app
+    streamResult.consumeStream()
+
+    // step 10 now create the response format from UI message stream, and transform this stream to Server Side Events format
+    return createUIMessageStreamResponse({
+        stream: toUIMessageStream({
+            stream: streamResult.stream,
+            originalMessages: messages,
+            /* incase if you dont have an existing message id create a msg id on the go
+             and keep size 16 as that matches our uuid and cuid that we set earlier
+             'msg' as unique identifer to get the messages generated here */
+            generateMessageId: createIdGenerator({ prefix: 'msg', size: 16 }),
+
+            //step 11 finally save the messages in databse upon stream end
+            onEnd: async ({ messages: finalMessages }) => {
+                try {
+                    await saveChatMessages(conversation.id, finalMessages, { updateTitle: false }) //donot update the title of this conversation
+                } catch (error) {
+                    console.error(error);
+                }
+            }
+        })
+
+    })
 }

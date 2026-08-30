@@ -4,11 +4,11 @@ import { generateText } from 'ai';
 const DEFAULT_CHAT_MODEL = "gpt-4o-mini";
 const SYSTEM_CONTEXT = ""
 
-const getChatModel = (model: string | null) => {
+export const getChatModel = (model: string | null) => {
     return openai(model || DEFAULT_CHAT_MODEL)
 }
 
-const getData = async (model: string, userPrompt: string) => {
+export const getData = async (model: string, userPrompt: string) => {
 
     if (userPrompt) {
         const result = await generateText({
