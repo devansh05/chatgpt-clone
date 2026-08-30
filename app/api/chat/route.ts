@@ -76,8 +76,8 @@ export async function POST(req: Request) {
             onEnd: async ({ messages: finalMessages }) => {
                 try {
                     await saveChatMessages(conversation.id, finalMessages, { updateTitle: false }) //donot update the title of this conversation
-                } catch (error) {
-                    console.error(error);
+                } catch {
+                    console.error("Failed to save chat messages after stream completion.");
                 }
             }
         })

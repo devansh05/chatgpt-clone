@@ -1,4 +1,3 @@
-import React from 'react'
 import { getUserConversations } from '@/features/conversations/actions/conversation-actions'
 import { notFound } from 'next/navigation'
 import { loadChatMessages } from '@/features/ai/actions/chat-store'
@@ -16,8 +15,7 @@ const NewConversationScreen = async ({ params }: ConversationProps) => {
     try {
         await getUserConversations(id)
     }
-    catch (error) {
-        console.log(`🟡 LOG - error: `, error)
+    catch {
         notFound()
     }
 
