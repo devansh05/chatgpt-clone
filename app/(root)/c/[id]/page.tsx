@@ -1,6 +1,8 @@
 import React from 'react'
 import { getUserConversations } from '@/features/conversations/actions/conversation-actions'
 import { notFound } from 'next/navigation'
+import { loadChatMessages } from '@/features/ai/actions/chat-store'
+import { ConversationView } from '@/features/conversations/components/conversation-view'
 
 type ConversationProps = {
 
@@ -19,8 +21,16 @@ const NewConversationScreen = async ({ params }: ConversationProps) => {
         notFound()
     }
 
+    const initialMessages = await loadChatMessages(id);
+
     return (
-        <div>{`Conversation Id : ${id}`}</div>
+        <div>{`Conversation Id : ${id}`}
+            <ConversationView
+                key={id}
+                conversationId={id}
+                initialMessages={initialMessages}
+            />
+        </div>
     )
 }
 

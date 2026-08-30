@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     const { message, id: messageId }: { message: UIMessage, id: string } = await req.json();
 
     // step 2 parse and validate input
-    if (!message || !id) {
+    if (!message || !messageId) {
         return new Response("Message or Message Id is required.", { status: 400 });
     }
 
